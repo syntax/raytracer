@@ -4,7 +4,7 @@
 #include "vec3.h"
 
 class ray {
-    public:
+    public: 
         ray() {}
 
         ray (const point3& origin, const vec3& direction)
