@@ -14,6 +14,7 @@ class camera {
     double aspect_ratio = 1.0;  // ratio of image width over height
     int    image_width  = 100;  // rendered image width in pixel count
     int    samples_per_pixel = 10;  // number of samples per pixel
+    int    max_depth = 10; // max recursion depth
 
     void render(const hittable& world) {
         initialize();
@@ -26,7 +27,7 @@ class camera {
                colour pixel_colour(0,0,0);
                for (int s = 0; s < samples_per_pixel; s++) {
                     ray r = get_ray(i, j);
-                    pixel_colour += ray_colour(r, world);
+                    pixel_colour += ray_colour(r, max_depth, world);
                }
                write_colour(std::cout, pixel_samples_scale * pixel_colour);
             }
@@ -83,11 +84,19 @@ class camera {
         return vec3(random_double() - 0.5, random_double() - 0.5, 0);
     }
 
-    colour ray_colour(const ray& r, const hittable& world) const {
-        hit_record rec;
+    colour ray_colour(const ray& r, int depth, const hittable& world) const {
+        if (depth <= 0) {
+            // max recursion depth exceeded
+            return colour(0, 0, 0);
+        }
 
-        if (world.hit(r, interval(0, infinity), rec)) {
-            return 0.5 * (rec.normal + colour(1,1,1));
+        hit_record rec;
+        
+        // ignoring hits that are very close to zero i.e. removes shadow acne
+        // https://digitalrune.github.io/DigitalRune-Documentation/html/3f4d959e-9c98-4a97-8d85-7a73c26145d7.htm
+        if (world.hit(r, interval(0.001, infinity), rec)) {
+            vec3 direction = random_on_hemisphere(rec.normal);
+            return 0.9 * ray_colour(ray(rec.p, direction), depth -1, world);
         }
 
         vec3 unit_direction = unit_vector(r.direction());
