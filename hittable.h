@@ -1,11 +1,13 @@
 #ifndef HITTABLE
 #define HITTABLE
 
+class material;
 
 struct hit_record {
     public:
         point3 p;
         vec3 normal;
+        shared_ptr<material> material_ptr;
         double t;
         bool front_face;
 

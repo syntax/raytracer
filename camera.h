@@ -2,6 +2,7 @@
 #define CAMERA_H
 
 #include "hittable.h"
+#include "material.h"
 
 
 /*
@@ -95,8 +96,11 @@ class camera {
         // ignoring hits that are very close to zero i.e. removes shadow acne
         // https://digitalrune.github.io/DigitalRune-Documentation/html/3f4d959e-9c98-4a97-8d85-7a73c26145d7.htm
         if (world.hit(r, interval(0.001, infinity), rec)) {
-            vec3 direction = rec.normal + random_unit_vector();
-            return 0.9 * ray_colour(ray(rec.p, direction), depth -1, world);
+            ray scattered;
+            colour attenuation;
+            if (rec.material_ptr->scatter(r, rec, attenuation, scattered))
+                return attenuation * ray_colour(scattered, depth-1, world);
+            return colour(0,0,0);
         }
 
         vec3 unit_direction = unit_vector(r.direction());
