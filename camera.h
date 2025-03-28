@@ -6,6 +6,8 @@
 
 #include <thread>
 #include <mutex>
+#include <chrono>
+#include <atomic>
 
 /*
 This class represents a camera in the scene. 
@@ -29,6 +31,7 @@ class camera {
 
     void render(const hittable& world) {
         initialize();
+        auto start_time = std::chrono::high_resolution_clock::now();
 
         std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
         
@@ -39,7 +42,6 @@ class camera {
         int thread_count = std::thread::hardware_concurrency();
         if (thread_count == 0) thread_count = 4;
         std::clog << "Using " << thread_count << " threads\n";
-
         std::vector<std::thread> threads;
         std::mutex mtx;
 
@@ -92,7 +94,11 @@ class camera {
             std::cout << image_rows[j];
         }
 
-        std::clog << "\nDone.\n";
+        auto end_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_time = end_time - start_time;
+        std::clog << "\nDone.";
+        std::clog << "\nElapsed render time: " << elapsed_time.count() << " seconds\n";
+        std::clog << "\n";
 
     }
 
