@@ -4,7 +4,6 @@
 #include "hittable.h"
 #include "material.h"
 
-
 #include <thread>
 #include <mutex>
 
@@ -33,10 +32,13 @@ class camera {
 
         std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
         
+        // buffer for threading output
+        std::vector<std::string> image_rows(image_height);
 
         // find number of threads/cores 
         int thread_count = std::thread::hardware_concurrency();
         if (thread_count == 0) thread_count = 4;
+        std::clog << "Using " << thread_count << " threads\n";
 
         std::vector<std::thread> threads;
         std::mutex mtx;
@@ -44,23 +46,27 @@ class camera {
         int rows_per_thread = image_height / thread_count;
 
         //rending lamba func given a start and end row
+        auto scanlines_remaining = std::make_shared<std::atomic<int>>(image_height);
+
+        // lambda function to be 'worked on' by each thread
         auto render_rows = [&](int start_row, int end_row) {
-            for (int j = 0; start_row < end_row; j++) {
-                // std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
-                std::ostringstream oss;
-                for (int i = 0; i < image_width; i++) {
-                colour pixel_colour(0,0,0);
-                for (int s = 0; s < samples_per_pixel; s++) {
+            for (int j = start_row; j < end_row; ++j) {
+                std::ostringstream row_output;
+                for (int i = 0; i < image_width; ++i) {
+                    colour pixel_colour(0, 0, 0);
+                    for (int s = 0; s < samples_per_pixel; ++s) {
                         ray r = get_ray(i, j);
                         pixel_colour += ray_colour(r, max_depth, world);
+                    }
+                    write_colour(row_output, pixel_samples_scale * pixel_colour);
                 }
-                write_colour(std::cout, pixel_samples_scale * pixel_colour);
-                }
-                {
-                    std::lock_guard<std::mutex> lock(mtx);
-                    std::clog << "\rScanlines remaining: " << (image_height - start_row) << ' ' << std::flush;
-                    std::cout << oss.str();
-                }
+
+                // update buffer
+                image_rows[j] = row_output.str();
+                
+                // mutex on scanlines_remaining to log
+                std::lock_guard<std::mutex> lock(mtx);
+                std::clog << "\rScanlines remaining: " << --(*scanlines_remaining) << ' ' << std::flush;
             }
         };
         
@@ -78,6 +84,12 @@ class camera {
         // join threads togethr
         for (auto& t : threads) {
             t.join();
+        }
+
+        // dumping buffer held in mem to cout
+        std::clog << "\nWriting image to cout...\n";
+        for (int j = 0; j < image_height; ++j) {
+            std::cout << image_rows[j];
         }
 
         std::clog << "\nDone.\n";
