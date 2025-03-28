@@ -4,6 +4,10 @@
 #include "hittable.h"
 #include "material.h"
 
+#include <thread>
+#include <mutex>
+#include <chrono>
+#include <atomic>
 
 /*
 This class represents a camera in the scene. 
@@ -27,22 +31,75 @@ class camera {
 
     void render(const hittable& world) {
         initialize();
+        auto start_time = std::chrono::high_resolution_clock::now();
 
         std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+        
+        // buffer for threading output
+        std::vector<std::string> image_rows(image_height);
 
-        for (int j = 0; j < image_height; j++) {
-            std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
-            for (int i = 0; i < image_width; i++) {
-               colour pixel_colour(0,0,0);
-               for (int s = 0; s < samples_per_pixel; s++) {
-                    ray r = get_ray(i, j);
-                    pixel_colour += ray_colour(r, max_depth, world);
-               }
-               write_colour(std::cout, pixel_samples_scale * pixel_colour);
+        // find number of threads/cores 
+        int thread_count = std::thread::hardware_concurrency();
+        if (thread_count == 0) thread_count = 4;
+        std::clog << "Using " << thread_count << " threads\n";
+        std::vector<std::thread> threads;
+        std::mutex mtx;
+
+        int rows_per_thread = image_height / thread_count;
+
+        //rending lamba func given a start and end row
+        auto scanlines_remaining = std::make_shared<std::atomic<int>>(image_height);
+
+        // lambda function to be 'worked on' by each thread
+        auto render_rows = [&](int start_row, int end_row) {
+            for (int j = start_row; j < end_row; ++j) {
+                std::ostringstream row_output;
+                for (int i = 0; i < image_width; ++i) {
+                    colour pixel_colour(0, 0, 0);
+                    for (int s = 0; s < samples_per_pixel; ++s) {
+                        ray r = get_ray(i, j);
+                        pixel_colour += ray_colour(r, max_depth, world);
+                    }
+                    write_colour(row_output, pixel_samples_scale * pixel_colour);
+                }
+
+                // update buffer
+                image_rows[j] = row_output.str();
+                
+                // mutex on scanlines_remaining to log
+                std::lock_guard<std::mutex> lock(mtx);
+                std::clog << "\rScanlines remaining: " << --(*scanlines_remaining) << ' ' << std::flush;
             }
+        };
+        
+        int curr_row = 0;
+        for (int i = 0; i < thread_count; i++) {
+            int start_row = curr_row;
+            int end_row = curr_row + rows_per_thread;
+            if (i == thread_count - 1) {
+                end_row = image_height;
+            }
+            threads.push_back(std::thread(render_rows, start_row, end_row));
+            curr_row = end_row;
         }
 
-        std::clog << "\rDone.                 \n";
+        // join threads togethr
+        for (auto& t : threads) {
+            t.join();
+        }
+
+        // dumping buffer held in mem to cout
+        std::clog << "\nWriting image to cout...\n";
+        for (int j = 0; j < image_height; ++j) {
+            std::cout << image_rows[j];
+        }
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_time = end_time - start_time;
+        std::clog << "\nDone.";
+        std::clog << "\nElapsed render time: " << elapsed_time.count() << " seconds\n";
+        std::clog << "\n";
+
     }
 
   private:
