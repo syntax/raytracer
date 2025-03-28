@@ -5,6 +5,9 @@
 #include "material.h"
 
 
+#include <thread>
+#include <mutex>
+
 /*
 This class represents a camera in the scene. 
 It constructs and dispatches rays into the world.
@@ -29,20 +32,56 @@ class camera {
         initialize();
 
         std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+        
 
-        for (int j = 0; j < image_height; j++) {
-            std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
-            for (int i = 0; i < image_width; i++) {
-               colour pixel_colour(0,0,0);
-               for (int s = 0; s < samples_per_pixel; s++) {
-                    ray r = get_ray(i, j);
-                    pixel_colour += ray_colour(r, max_depth, world);
-               }
-               write_colour(std::cout, pixel_samples_scale * pixel_colour);
+        // find number of threads/cores 
+        int thread_count = std::thread::hardware_concurrency();
+        if (thread_count == 0) thread_count = 4;
+
+        std::vector<std::thread> threads;
+        std::mutex mtx;
+
+        int rows_per_thread = image_height / thread_count;
+
+        //rending lamba func given a start and end row
+        auto render_rows = [&](int start_row, int end_row) {
+            for (int j = 0; start_row < end_row; j++) {
+                // std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
+                std::ostringstream oss;
+                for (int i = 0; i < image_width; i++) {
+                colour pixel_colour(0,0,0);
+                for (int s = 0; s < samples_per_pixel; s++) {
+                        ray r = get_ray(i, j);
+                        pixel_colour += ray_colour(r, max_depth, world);
+                }
+                write_colour(std::cout, pixel_samples_scale * pixel_colour);
+                }
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    std::clog << "\rScanlines remaining: " << (image_height - start_row) << ' ' << std::flush;
+                    std::cout << oss.str();
+                }
             }
+        };
+        
+        int curr_row = 0;
+        for (int i = 0; i < thread_count; i++) {
+            int start_row = curr_row;
+            int end_row = curr_row + rows_per_thread;
+            if (i == thread_count - 1) {
+                end_row = image_height;
+            }
+            threads.push_back(std::thread(render_rows, start_row, end_row));
+            curr_row = end_row;
         }
 
-        std::clog << "\rDone.                 \n";
+        // join threads togethr
+        for (auto& t : threads) {
+            t.join();
+        }
+
+        std::clog << "\nDone.\n";
+
     }
 
   private:

@@ -53,7 +53,7 @@ int main() {
 
     cam.aspect_ratio      = 16.0 / 9.0;
     cam.image_width       = 1200;
-    cam.samples_per_pixel = 20; // when this is set at 500, it will take longer.
+    cam.samples_per_pixel = 2; // when this is set at 500, it will take longer.
     cam.max_depth         = 50;
 
     cam.vfov     = 20;
