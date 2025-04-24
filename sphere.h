@@ -2,10 +2,11 @@
 #define SPHERE
 
 #include "hittable.h"
+#include <memory>
 
 class sphere : public hittable {
     public:
-        sphere(const point3& center, double radius, shared_ptr<material> material_ptr) : center(center), radius(std::fmax(0,radius)), material_ptr(material_ptr) {
+        sphere(const point3& center, double radius, std::unique_ptr<material> material_ptr) : center(center), radius(std::fmax(0,radius)), material_ptr(std::move(material_ptr)) {
         }
 
         bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
@@ -33,7 +34,7 @@ class sphere : public hittable {
             rec.p = r.at(rec.t);
             rec.normal = (rec.p - center) / radius;
             rec.set_face_normal(r, rec.normal);
-            rec.material_ptr = material_ptr;
+            rec.material_ptr = material_ptr.get();
     
             return true;
         }
@@ -41,7 +42,7 @@ class sphere : public hittable {
     private:
         point3 center;
         double radius;    
-        shared_ptr<material> material_ptr;
+        std::unique_ptr<material> material_ptr;
 };
 
 #endif
