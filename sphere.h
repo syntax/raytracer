@@ -9,7 +9,15 @@ class sphere : public hittable {
         sphere(const point3& center, double radius, std::unique_ptr<material> material_ptr) : center(center), radius(std::fmax(0,radius)), material_ptr(std::move(material_ptr)) {
         }
 
-        bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+        virtual bool bounding_box(aabb& output_box) const override {
+            output_box = aabb(
+              center - vec3(radius, radius, radius),
+              center + vec3(radius, radius, radius)
+            );
+            return true;
+        }
+
+        virtual bool hit(const ray& r, const interval& ray_t, hit_record& rec) const override {
             vec3 oc = center - r.origin();
             auto a = r.direction().length_squared();
             auto h = dot(r.direction(), oc);

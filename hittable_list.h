@@ -2,39 +2,44 @@
 #define HITTABLE_LIST_H
 
 #include "hittable.h"
-
 #include <vector>
+#include <memory>
 
 class hittable_list : public hittable {
   public:
-    std::vector<std::unique_ptr<hittable>> objects;
+    std::vector<std::shared_ptr<hittable>> objects;
 
-    hittable_list() = default;
-    explicit hittable_list(std::unique_ptr<hittable> object) {
-        add(std::move(object));
-    }
+    hittable_list() {}
 
-    void clear() { objects.clear(); }
+    void add(std::shared_ptr<hittable> obj) { objects.push_back(obj); }
 
-    void add(std::unique_ptr<hittable> object) {
-        objects.push_back(std::move(object));
-    }
-
-
-    bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
-        hit_record temp_rec;
+    virtual bool hit(const ray& r, const interval& t_range, hit_record& rec) const override {
+        hit_record temp;
         bool hit_anything = false;
-        auto closest_so_far = ray_t.max;
+        double closest = t_range.max();
 
         for (const auto& object : objects) {
-            if (object->hit(r, {ray_t.min, closest_so_far}, temp_rec)) {
+            if (object->hit(r, interval(t_range.min(), closest), temp)) {
                 hit_anything = true;
-                closest_so_far = temp_rec.t;
-                rec = temp_rec;
+                closest = temp.t;
+                rec = temp;
             }
         }
-
+        
         return hit_anything;
+    }
+
+    virtual bool bounding_box(aabb& output_box) const override {
+        if (objects.empty()) return false;
+        aabb temp_box;
+        bool first = true;
+        for (auto& obj : objects) {
+            if (!obj->bounding_box(temp_box))
+                return false;
+            output_box = first ? temp_box : surrounding_box(output_box, temp_box);
+            first = false;
+        }
+        return true;
     }
 };
 
